@@ -26,6 +26,7 @@ struct ShaderState {
     resolution_x: u32,
     resolution_y: u32,
     elapsed: f32,
+    _pad: f32,
 }
 
 @group(0) @binding(0)
