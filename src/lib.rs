@@ -76,6 +76,7 @@ impl State {
             resolution_x: size.width,
             resolution_y: size.height,
             elapsed: 0.0,
+            _pad: [0],
         };
         let shader_state_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Shader State Buffer"),
@@ -248,6 +249,7 @@ struct ShaderState {
     resolution_x: u32,
     resolution_y: u32,
     elapsed: f32,
+    _pad: [u32; 1],
 }
 
 impl ShaderState {
@@ -257,6 +259,7 @@ impl ShaderState {
             resolution_x: size.width,
             resolution_y: size.height,
             elapsed: state.created_at.elapsed().as_secs_f32(),
+            _pad: [0],
         }
     }
 }
