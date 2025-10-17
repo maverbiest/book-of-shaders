@@ -23,10 +23,16 @@ fn vs_main(
 
 // Fragment shader
 struct ShaderState {
+    // 32 bytes total
     resolution_x: u32,
     resolution_y: u32,
     elapsed: f32,
-    _pad: f32,
+    mouse_pos_x: f32,
+    mouse_pos_y: f32,
+    // padding to align to 16-byte boundary
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 @group(0) @binding(0)
@@ -35,6 +41,8 @@ var<uniform> shader_state: ShaderState;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = in.clip_position.xy / vec2<f32>(f32(shader_state.resolution_x), f32(shader_state.resolution_y));
-    return vec4<f32>(uv.x, sin(shader_state.elapsed), uv.y, 1.0);
+    let mouse_pos: vec2<f32> = vec2<f32>(shader_state.mouse_pos_x, shader_state.mouse_pos_y) / vec2<f32>(f32(shader_state.resolution_x), f32(shader_state.resolution_y));
+
+    return vec4<f32>(uv.x, mouse_pos.y, uv.y, 0.0);
 }
 

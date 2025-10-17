@@ -5,6 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::{BindGroup, util::DeviceExt, wgc::binding_model::BindGroupDescriptor};
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalPosition,
     event::{KeyEvent, WindowEvent},
     event_loop::{self, ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
@@ -22,6 +23,8 @@ struct State {
     shader_state_bind_group: BindGroup,
     shader_state_buffer: wgpu::Buffer,
     window: Arc<Window>,
+    mouse_pos_x: f32,
+    mouse_pos_y: f32,
 }
 
 impl State {
@@ -76,7 +79,9 @@ impl State {
             resolution_x: size.width,
             resolution_y: size.height,
             elapsed: 0.0,
-            _pad: [0],
+            _pad: [0; 3],
+            mouse_pos_x: 0.0,
+            mouse_pos_y: 0.0,
         };
         let shader_state_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Shader State Buffer"),
@@ -164,6 +169,8 @@ impl State {
             shader_state_bind_group,
             shader_state_buffer,
             window,
+            mouse_pos_x: 0.0,
+            mouse_pos_y: 0.0,
         });
     }
 
@@ -241,6 +248,13 @@ impl State {
             bytemuck::bytes_of(&shader_state),
         );
     }
+
+    fn handle_mouse_moved(&mut self, mouse_pos: PhysicalPosition<f64>) {
+        self.mouse_pos_x = mouse_pos.x as f32;
+        self.mouse_pos_y = mouse_pos.y as f32;
+
+        self.update();
+    }
 }
 
 #[repr(C)]
@@ -249,7 +263,9 @@ struct ShaderState {
     resolution_x: u32,
     resolution_y: u32,
     elapsed: f32,
-    _pad: [u32; 1],
+    mouse_pos_x: f32,
+    mouse_pos_y: f32,
+    _pad: [u32; 3],
 }
 
 impl ShaderState {
@@ -259,7 +275,9 @@ impl ShaderState {
             resolution_x: size.width,
             resolution_y: size.height,
             elapsed: state.created_at.elapsed().as_secs_f32(),
-            _pad: [0],
+            mouse_pos_x: state.mouse_pos_x,
+            mouse_pos_y: state.mouse_pos_y,
+            _pad: [0; 3],
         }
     }
 }
@@ -304,6 +322,7 @@ impl ApplicationHandler<State> for App {
                     }
                 }
             }
+            WindowEvent::CursorMoved { position, .. } => state.handle_mouse_moved(position),
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
