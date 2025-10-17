@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc, time::Instant};
 
 use anyhow::Result;
+use bytemuck::{Pod, Zeroable};
+use wgpu::{BindGroup, util::DeviceExt, wgc::binding_model::BindGroupDescriptor};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -16,6 +18,9 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
+    created_at: Instant,
+    shader_state_bind_group: BindGroup,
+    shader_state_buffer: wgpu::Buffer,
     window: Arc<Window>,
 }
 
@@ -67,12 +72,46 @@ impl State {
             view_formats: vec![],
         };
 
-        let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shaders.wgsl"));
+        let shader_state = ShaderState {
+            resolution_x: size.width,
+            resolution_y: size.height,
+            elapsed: 0.0,
+        };
+        let shader_state_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Shader State Buffer"),
+            contents: bytemuck::cast_slice(&[shader_state]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let shader_state_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Uniform Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: std::num::NonZeroU64::new(
+                            std::mem::size_of::<ShaderState>() as u64,
+                        ),
+                    },
+                    count: None,
+                }],
+            });
+        let shader_state_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Uniform Bind Group"),
+            layout: &shader_state_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: shader_state_buffer.as_entire_binding(),
+            }],
+        });
 
+        let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shaders.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&shader_state_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -120,6 +159,9 @@ impl State {
             config,
             is_surface_configured: false,
             render_pipeline,
+            created_at: Instant::now(),
+            shader_state_bind_group,
+            shader_state_buffer,
             window,
         });
     }
@@ -170,6 +212,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.shader_state_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
 
@@ -185,6 +228,35 @@ impl State {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+        }
+        self.update();
+    }
+
+    fn update(&mut self) {
+        let shader_state = ShaderState::from_state(&self);
+        self.queue.write_buffer(
+            &self.shader_state_buffer,
+            0,
+            bytemuck::bytes_of(&shader_state),
+        );
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+struct ShaderState {
+    resolution_x: u32,
+    resolution_y: u32,
+    elapsed: f32,
+}
+
+impl ShaderState {
+    fn from_state(state: &State) -> Self {
+        let size = state.window.inner_size();
+        Self {
+            resolution_x: size.width,
+            resolution_y: size.height,
+            elapsed: state.created_at.elapsed().as_secs_f32(),
         }
     }
 }
@@ -216,16 +288,19 @@ impl ApplicationHandler<State> for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
-            WindowEvent::RedrawRequested => match state.render() {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    let size = state.window.inner_size();
-                    state.resize(size.width, size.height);
+            WindowEvent::RedrawRequested => {
+                state.update();
+                match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        let size = state.window.inner_size();
+                        state.resize(size.width, size.height);
+                    }
+                    Err(e) => {
+                        log::error!("Unable to render {}", e);
+                    }
                 }
-                Err(e) => {
-                    log::error!("Unable to render {}", e);
-                }
-            },
+            }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
