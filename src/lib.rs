@@ -1,8 +1,8 @@
-use std::{num::NonZeroU64, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use wgpu::{BindGroup, util::DeviceExt, wgc::binding_model::BindGroupDescriptor};
+use wgpu::{BindGroup, util::DeviceExt};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -135,7 +135,7 @@ impl State {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -206,9 +206,9 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 1.0,
-                            g: 1.0,
-                            b: 1.0,
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

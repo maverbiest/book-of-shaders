@@ -43,6 +43,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = in.clip_position.xy / vec2<f32>(f32(shader_state.resolution_x), f32(shader_state.resolution_y));
     let mouse_pos: vec2<f32> = vec2<f32>(shader_state.mouse_pos_x, shader_state.mouse_pos_y) / vec2<f32>(f32(shader_state.resolution_x), f32(shader_state.resolution_y));
 
-    return vec4<f32>(uv.x, mouse_pos.y, uv.y, 0.0);
+    let mouse_dist = dot(abs(mouse_pos.xy - uv.xy) / 2.0, vec2<f32>(1.0, 1.0));
+
+    return vec4<f32>(uv.x, uv.y, 1.0 - (mouse_dist * 50.0), abs(sin(shader_state.elapsed)));
 }
 
